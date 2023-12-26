@@ -138,12 +138,21 @@ impl Tracer {
                 .last();
 
             step.state_diff = match (op, journal_entry) {
-                (
-                    opcode::SLOAD | opcode::SSTORE,
-                    Some(JournalEntry::StorageChange { address, key, .. }),
-                ) => {
+                (opcode::SSTORE, Some(JournalEntry::StorageChange { address, key, .. })) => {
                     let value = data.journaled_state.state[address].storage[key].present_value();
                     Some((ru256_to_u256(*key), value.into()))
+                }
+                (opcode::SLOAD, _) => {
+                    if step.op != OpCode(opcode::SLOAD) {
+                        // this case happens idk why
+                        None
+                    } else {
+                        let address = B160::from(step.contract.to_fixed_bytes());
+                        let key = step.stack.peek(0).unwrap();
+                        let value =
+                            data.journaled_state.state[&address].storage[&key].present_value();
+                        Some((ru256_to_u256(key), value.into()))
+                    }
                 }
                 _ => None,
             };
